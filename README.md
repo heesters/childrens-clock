@@ -1,160 +1,189 @@
-# Children's IoT Clock
+# Children's Clock
 
-[![CI](https://github.com/chrisns/childrens-clock/actions/workflows/ci.yaml/badge.svg)](https://github.com/chrisns/childrens-clock/actions/workflows/ci.yaml)
-[![Security Scanning](https://github.com/chrisns/childrens-clock/actions/workflows/security.yml/badge.svg)](https://github.com/chrisns/childrens-clock/actions/workflows/security.yml)
-![GitHub License](https://img.shields.io/github/license/chrisns/childrens-clock)
-![GitHub language count](https://img.shields.io/github/languages/count/chrisns/childrens-clock)
-![GitHub top language](https://img.shields.io/github/languages/top/chrisns/childrens-clock)
+An ESPHome-based "ok-to-wake" clock for kids, built on a 32×8 WS2812B LED matrix. The color tells a child what to do at a glance: red means stay in bed, amber means almost time, green means it's OK to get up. It also handles bedtime wind-down, naps, weekends and holidays, and reports room temperature and humidity to Home Assistant.
 
-![AI generated comic style scene of a child in bed, reading, then getting up to fight crime](./docs/images/comic.png)
+This is a fork of [chrisns/childrens-clock](https://github.com/chrisns/childrens-clock), reworked with a new schedule engine, perceptual brightness control, animations and a dedicated night view.
 
-## Why
+<!-- Add a photo of your clock here -->
+<!-- ![The clock](docs/clock.jpg) -->
 
-This was a thing I made my kids after buying and becoming 🤯 frustrated with many different [commercial offerings](https://www.google.com/search?q=childrens+coloured+clock+wake+up&udm=3)/[[duckduckgo]](https://duckduckgo.com/?q=childrens+clock+wake+up&iar=shopping) that:
+## Features
 
-- Lost track of time if unplugged
-- Manually updating time was hard and fiddly
-- Didn't update the time for daylight savings
-- Updating the config or time required it being in 'awake' mode, lighting up a dark room
-- Couldn't be easily adjusted for weekends or ad-hoc for holidays/late nights
-- If the Child could read, and/or count the stars, they would often need get out of bed to get near enough to the clock to determine more than just the color of the light; potentially putting on glasses if needed.
-- Didn't provide a "its ok to be awake, and play/read quietly, but stay in your room"
-- It would age quickly and not look grown up
-- It wouldn't collect data - future plans to put temp sensors, bluetooth relay, and sensors (**not a camera**!)
-- Couldn't be made to do all sorts of other things I could think up with a [tiny computer](https://en.wikipedia.org/wiki/ESP32) that is around 15,000 times more powerful than [what is required to land on the moon!](https://en.wikipedia.org/wiki/Apollo_Guidance_Computer)
+- **Five states**: Sleep (red), Waking up (amber), Awake (green), Wind down (amber) and Nap (purple).
+- **Separate schoolday and weekend schedules**, plus a Holiday Mode that treats every day as a weekend.
+- **Optional daytime nap** with its own start and end time.
+- **Bedtime wind-down**: for the last 30 minutes before bed the display blends smoothly from green to amber.
+- **Countdown cues**: the colon blinks slowly in the last 10 minutes of an amber period and quickly in the last 5.
+- **Progress bar** along the top row that shrinks as the current period runs out.
+- **Night view**: during sleep and naps the big clock is replaced by a small time and a "Zzz" icon, kept very dim.
+- **Transition animations**: a sun sets, rises or slips behind a horizon when the state changes.
+- **Day and night brightness** as simple 0–100% sliders, with perceptual gamma so low values stay usable.
+- **Temperature and humidity** from a DHT22 sensor.
+- **Fail-safes**: a blinking red border when there is no valid time, and a dashed progress bar when the schedule doesn't make sense.
 
-## When (History)
+## Hardware
 
-So I made a thing! 😱😱😱  _confession: 🤫 this isn't the first generation, previous code is [open](https://github.com/chrisns/my-esphome-devices/blob/d97260ce4b8e330513456011d3693e02f36b1b73/noahclock.yaml) though without documentation_
+| Part | Notes |
+| --- | --- |
+| ESP32 CH340C, USB-C (ESP32-DevKit style) | Any ESP32 dev board should work; see the chip revision note below |
+| WS2812B 8×32 RGB LED matrix | 256 LEDs, serpentine column wiring |
+| DHT22 temperature/humidity sensor | A module with a built-in pull-up resistor is easiest |
+| 3D-printed case | [32 × 8 WS2812B LED Matrix Case on MakerWorld](https://makerworld.com/en/models/1948396-32-x-8-ws2812b-led-matrix-case#profileId-2093378) |
+| 5V power supply | See the power note below |
 
-## What
+### Wiring
 
-[![Made for ESPHome](https://esphome.io/_static/made-for-esphome-black-on-white.svg)](https://esphome.io/guides/made_for_esphome)
+| From | To |
+| --- | --- |
+| Matrix DIN | ESP32 GPIO13 |
+| Matrix 5V / GND | 5V supply / GND |
+| DHT22 data | ESP32 GPIO4 |
+| DHT22 VCC / GND | ESP32 3.3V / GND |
 
-This is made for [Made for ESPHome](https://esphome.io/) so you should be able to go buy a cheap led matrix, esp32, solder 3 pins, flash the chip and you've got something that even works with [Home Assistant](https://www.home-assistant.io/)!
+Make sure the matrix, ESP32 and supply share a common ground.
 
-## How to
+### Power
 
-You will need to buy:
+At the default brightness settings (25% day, 1% night) the matrix draws very little and the clock runs fine from USB. Pushing day brightness to 100% lights every pixel at full green, which can draw around 5A. That is far more than USB through the dev board can deliver, so either keep brightness moderate or power the matrix from a suitably rated 5V supply.
 
-- 1x [ESP32](https://www.aliexpress.com/item/1005006692499859.html) £1.91 _(worth buying a few in case you mess up the soldering)_
-- 1x [WS2812B 8x32 LED Matrix](https://www.aliexpress.com/item/1005002399031444.html) £2.59
-- 1x [15x5" Photo frame](https://www.amazon.co.uk/dp/B0BBPJPFC9)
-- 1x 5V power supply rated for **at least 4-5A** — 256 WS2812 LEDs can draw well beyond what a typical 1-2A USB charger or phone brick supplies, even at modest brightness. Undersized supplies cause brownout resets rather than an obvious failure, which is a confusing thing to debug.
+### Chip revision
 
-You will need:
+The config sets `minimum_chip_revision: "3.1"`. Firmware built this way will not boot on older ESP32 silicon. If your board bootloops after flashing, check the chip revision in the serial log and lower or remove this setting.
 
-- A soldering iron
-- Some solder
-- A usb cable
+## Installation
 
-### Build
+### 1. Files
 
-#### Solder
+Place the files in your ESPHome config directory like this:
 
-  1. `RED` 5v wire on the matrix > the `5v` pin on the esp32
-  1. `WHITE` gnd wire on the matrix > a `gnd` pin on the esp32
-  1. `GREEN` din wire on the matrix > `13` pin on the esp32
-
-You should end up with something (more tidy than this pic)
-
-![image showing wiring to esp32](docs/images/IMG_4181.jpeg)
-
-#### Flash
-
-You'll now need to flash the board
-
-1. Connect the ESP32 board to your computer
-1. Download the [latest firmware image](https://github.com/chrisns/childrens-clock/releases/latest/download/firmware-factory.bin)
-1. Go to [web.esphome.io](https://web.esphome.io/)
-1. Click connect, and select the serial port for your device
-1. Click install
-1. Follow the buttons to connect to the wifi, and away you go!
-
-#### Configure
-
-> When configuring the timezone, you'll need to refer to the [`POSIX` timezone config](https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv) just copy paste from this page into the config page of the device and you're good.
-
-![screenshot of configuration page](./docs/images/config-screenshot.jpg)
-
-| Config          | Color                                   | Description                                                                    |
-| --------------- | --------------------------------------- | ------------------------------------------------------------------------------ |
-| Weekend wake up | <span style="color:orange">Amber</span> | The time its ok for your kid to get up and quietly read on a weekend (sat+sun) |
-| Weekend bedtime | <span style="color:red">Red</span>      | The time your kid should go to bed on a weekend (sat+sun)                      |
-| Weekend go      | <span style="color:green">Green</span>  | The time its ok for your kid to come jump on your bed on a weekend (sat+sun)   |
-| Weekday wake up | <span style="color:orange">Amber</span> | The time its ok for your kid to get up and quietly read on a weekday (mon-fri) |
-| Weekday bedtime | <span style="color:red">Red</span>      | The time your kid should go to bed on a weekday (mon-fri)                      |
-| Weekday go      | <span style="color:green">Green</span>  | The time its ok for your kid to come jump on your bed on a weekday (mon-fri)   |
-
-#### Mount
-
-I've put mine in a photo frame with just a sheet of white paper in front of the matrix to diffuse it a bit, you might like to try something more bespoke for your kids, maybe some art, picture of a pet/family etc.
-
-#### Install
-
-It's a photo frame, so putting it on the wall should be easy
-
-![image showing the project mounted on a wall](./docs/images/daytime.jpeg)
-
-#### Explain
-
-Theres some dots on the top of the matrix, these reduce over time until its the next phase, so provide a visual countdown, if your kid wakes up in the night _"how many dots are left?"_ is a simple way for them to figure out how long is left, and for you to ask why they're jumping on you in the dark without opening your eyes and send them back to bed, because they should know better.
-
-![image of clock in different states](./docs/images/orange-red.png)
-
-#### Forget it
-
-After configuration, it should just continue to work, it'll continue to get its time from the internet, automatically adjust for daylight savings (if that applies to you).
-
-#### Extend
-
-The code is open source! so feel free to extend this, do fun things, add temp sensors, air quality, buzzers, speakers, motors, the possibilities are endless, **PLEASE SHARE** what you do, take photos, share the code, make a pull request, or just raise an 'issue' with your pics and I'll point at them.
-
-This should already work with [Home Assistant](https://www.home-assistant.io/), if you've got Home Assistant installed it should find the device on your network and offer to connect to it, if not you can give it the address of the device.
-
-![home assistant discovered device](./docs/images/home-assistant-discovered.jpg)
-![home assistant configuration page for device](./docs/images/home-assistant-config.jpg)
-
-THANKS!
-
-#### Other
-
-If you flash the device and it fails to connect to your wifi for whatever reason, it'll run its own access point that you can connect to. It also provides a bluetooth provisioner that you can use. Just go to <https://www.improv-wifi.com/>
-
----
-
-## Development
-
-This is all intended to use [dev containers](https://containers.dev/)
-
-### Run tests
-
-```bash
-rake test
+```
+esphome/
+├── children_clock_base.yaml
+├── childrens-clock.yaml      # your device file (see below)
+├── lexis.ttf                 # pixel font used for the clock digits
+├── secrets.yaml
+└── src/
+    └── childrensclock.h
 ```
 
-```raw
-Test 'TestMain.c'
------------------
-Running TestMain.out...
+### 2. Secrets
 
---------------------
-OVERALL TEST SUMMARY
---------------------
-TESTED:  5
-PASSED:  5
-FAILED:  0
-IGNORED: 0
+Add these to `secrets.yaml`:
+
+```yaml
+wifi_ssid: "your-network"
+wifi_password: "your-password"
+api_encryption_key: "generate-one-with-esphome"
 ```
 
-### Run tests on code change
+### 3. Device file
 
-```bash
-guard
+Create a small device file that sets the substitutions and pulls in the base config:
+
+```yaml
+substitutions:
+  device_name: childrens-clock
+  friendly_name: Children's Clock
+  temp_offset: "-2.0"      # correct for heat from the case and LEDs
+  humidity_offset: "0"
+
+packages:
+  base: !include children_clock_base.yaml
 ```
 
-### Build
+### 4. Flash
 
-```bash
-rake build
+Flash over USB the first time with `esphome run childrens-clock.yaml`. After that, updates can go over the air. The device is then discovered by Home Assistant through the ESPHome integration.
+
+### Timezone
+
+The timezone is set to `Europe/Amsterdam` in both `time:` sources in `children_clock_base.yaml`. Change both if you live elsewhere.
+
+## How the schedule works
+
+Each "clock day" runs from one morning's wake-up time to the next morning's wake-up time:
+
+| Period | State | Color |
+| --- | --- | --- |
+| Wake up → Go | Waking up | Amber |
+| Go → 30 min before bedtime | Awake (or Nap, if enabled) | Green (purple during nap) |
+| Last 30 min before bedtime | Wind down | Green fading to amber |
+| Bedtime → next Wake up | Sleep | Red |
+
+**Weekend days** (Saturday and Sunday) use the weekend Wake up and Go times. **Weekend nights** (Friday and Saturday) use the weekend Bedtime, so Friday evening can be later than other school nights. **Holiday Mode** treats every day and night as a weekend.
+
+Bedtimes after midnight are supported.
+
+### Schedule validation
+
+For every day of the week, the times must satisfy:
+
 ```
+wake < go < (bedtime − 30 min) < bedtime < next morning's wake
+```
+
+If the nap is enabled, it must start after Go and end before the wind-down starts. If any day breaks these rules, the clock shows a dashed progress bar, reports "Invalid schedule" and skips animations until the times are fixed. This means you can safely edit times one at a time without triggering a stray sunset.
+
+### Default times
+
+| Setting | Default |
+| --- | --- |
+| Schoolday Wake up / Go / Bedtime | 06:45 / 07:00 / 19:00 |
+| Weekend Wake up / Go / Bedtime | 07:00 / 07:15 / 19:00 |
+| Nap Start / End | 12:30 / 15:00 (disabled by default) |
+
+## The display
+
+**Daytime and amber periods** show the time in large digits. The top row is a progress bar that shrinks as the current period runs out, with a partially lit final pixel for smooth movement.
+
+**Sleep and nap** switch to the night view: a small HH:MM on the left, a "Zzz" icon on the right and a dimmed progress bar, all at night brightness.
+
+**Animations** play for 20 seconds when the state changes:
+
+| Transition | Animation |
+| --- | --- |
+| Awake or Wind down → Sleep | Sunset |
+| Sleep → Waking up | Sunrise |
+| Waking up → Awake | Sun rises off the top |
+| Awake → Nap | Nap start |
+| Nap → Awake | Nap end |
+
+**No time available** (for example right after boot with no network) shows a dim blinking red border.
+
+### Brightness
+
+Brightness Day controls green, Brightness Night controls red and the nap purple, and amber sits halfway between them. Both sliders use a 2.2 perceptual gamma curve, so 1% is the dimmest possible glow rather than off, and 0% turns that state off entirely. Gamma is applied in `childrensclock.h` rather than by ESPHome, so all three color channels scale together and amber stays amber at low levels.
+
+## Home Assistant entities
+
+| Entity | Type | Purpose |
+| --- | --- | --- |
+| Clock State | Text sensor | Sleep, Waking up, Awake, Wind down, Nap, Invalid schedule or No time |
+| Clock Schedule Valid | Binary sensor | Whether the current schedule passes validation |
+| Schoolday / Weekend Wake up, Go, Bedtime | Time | The schedule |
+| Nap Start, Nap End | Time | Nap window |
+| Nap Enabled | Switch | Turns the nap on or off |
+| Holiday Mode | Switch | Treats every day as a weekend |
+| Brightness Day, Brightness Night | Number | 0–100% |
+| Room Temperature, Room Humidity | Sensor | From the DHT22 |
+| Test Sunset / Sunrise / Nap Start / Nap End / Day Start Animation | Button (diagnostic) | Preview animations |
+| Color Test Active, Color Test Red / Green / Blue | Switch, Number (diagnostic) | Fill the matrix with a raw RGB color |
+| Restart, Safe Mode Reboot, Factory Reset | Button | Maintenance |
+
+## Customizing
+
+- **Matrix orientation**: if your matrix is wired differently, adjust `pixel_mapper` or `rotation` in the `display:` section.
+- **Colors**: the hues are defined at the top of `childrensclock.h` (`GREEN_HUE`, `AMBER_HUE`, `RED_HUE`, `NAP_HUE`, `HORIZON_HUE`).
+- **Wind-down length**: `WIND_DOWN_MINUTES` in `childrensclock.h`.
+- **Blink thresholds**: `PULSE_WARN_THRESHOLD_MIN` and `PULSE_URGENT_THRESHOLD_MIN`.
+- **Animation and fade speed**: `TRANSITION_ANIM_DURATION_MS` and `FADE_TAU_MS`.
+
+## Tips
+
+- The DHT22 reads high inside the case because of heat from the ESP32 and LEDs. Use `temp_offset` to correct it, or mount the sensor outside the case for steadier readings.
+- Use the Color Test controls to check your matrix wiring and to judge how colors look at low raw values in a dark room.
+
+## Credits
+
+- Original project: [chrisns/childrens-clock](https://github.com/chrisns/childrens-clock)
+- Case design: [32 × 8 WS2812B LED Matrix Case](https://makerworld.com/en/models/1948396-32-x-8-ws2812b-led-matrix-case#profileId-2093378) on MakerWorld
