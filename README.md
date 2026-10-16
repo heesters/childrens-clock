@@ -4,7 +4,7 @@ An ESPHome-based "ok-to-wake" clock for kids, built on a 32×8 WS2812B LED matri
 
 This is a fork of [chrisns/childrens-clock](https://github.com/chrisns/childrens-clock), reworked with a new schedule engine, perceptual brightness control, animations and a dedicated night view.
 
-[Animations](src/animations.gif)
+![Animations](src/animations.gif)
 
 ## Features
 
